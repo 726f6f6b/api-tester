@@ -7,6 +7,19 @@
 (function () {
   if (window.parent === window) return; // only meaningful inside the tester iframe
 
+  // History API shim — must run before the page's own scripts (the bridge is
+  // injected at the top of <head>). With the injected <base>, SPA routers
+  // resolve their URLs against the real origin; pushState/replaceState with a
+  // cross-origin URL throws SecurityError and crashes React/Next hydration.
+  // Retry without the URL so the state transition succeeds and the app lives.
+  ['pushState', 'replaceState'].forEach(function (m) {
+    var orig = history[m].bind(history);
+    history[m] = function (state, title, url) {
+      try { return orig(state, title, url); }
+      catch (e) { return orig(state, title); }
+    };
+  });
+
   var PICK_OUTLINE = '2px solid #e0b341';
   var picking = false;
   var hovered = null;
