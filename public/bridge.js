@@ -12,13 +12,33 @@
   // resolve their URLs against the real origin; pushState/replaceState with a
   // cross-origin URL throws SecurityError and crashes React/Next hydration.
   // Retry without the URL so the state transition succeeds and the app lives.
+  // NOTE: relative URLs passed to push/replaceState resolve against the
+  // injected <base> (the real site's origin) and therefore throw. On failure,
+  // remap the intended URL onto our own origin, keeping path+search+hash, so
+  // SPA route transitions still land in the address bar instead of vanishing.
   ['pushState', 'replaceState'].forEach(function (m) {
     var orig = history[m].bind(history);
     history[m] = function (state, title, url) {
       try { return orig(state, title, url); }
-      catch (e) { return orig(state, title); }
+      catch (e) {
+        try {
+          var u = new URL(url, document.baseURI);
+          return orig(state, title, location.origin + u.pathname + u.search + u.hash);
+        } catch (e2) { return orig(state, title); }
+      }
     };
   });
+
+  // Rewrite the visible URL from /proxy?url=... to the target's own path on
+  // our origin. SPA routers read window.location at hydration and crash when
+  // the pathname doesn't match any of their routes.
+  try {
+    var proxied = new URLSearchParams(location.search).get('url');
+    if (proxied) {
+      var t = new URL(/^https?:\/\//i.test(proxied) ? proxied : 'https://' + proxied);
+      history.replaceState(null, '', location.origin + t.pathname + t.search + t.hash);
+    }
+  } catch (e) { /* leave the proxy URL as-is */ }
 
   var PICK_OUTLINE = '2px solid #e0b341';
   var picking = false;
