@@ -1,0 +1,14 @@
+{
+  "name": "codi-api-tester",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local dashboard for testing the Codi partner WebSocket API against real websites",
+  "scripts": {
+    "start": "node server.js",
+    "dev:cf": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

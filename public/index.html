@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Codi API Tester</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --panel2: #f8f9fa; --border: #dfe3e8;
+    --text: #1b1f24; --dim: #667085; --accent: #0969da; --green: #1a7f37;
+    --red: #d1242f; --yellow: #9a6700; --purple: #8250df; --black: #16191d;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+  svg.icon { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  header { display: flex; align-items: center; gap: 14px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header h1 { display: flex; align-items: center; gap: 9px; font-family: "Caveat", "Brush Script MT", cursive; font-size: 23px; font-weight: 400; margin: 0 8px 0 0; white-space: nowrap; }
+  .logo { width: 28px; height: 28px; color: var(--black); flex: none; animation: wiggle 9s ease-in-out infinite; }
+  .logo .eye { animation: blink 4.2s infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes blink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    93%, 96% { transform: scaleY(0.08); }
+  }
+  @keyframes wiggle {
+    0%, 84%, 100% { transform: rotate(0deg); }
+    88% { transform: rotate(-16deg); }
+    93% { transform: rotate(13deg); }
+    97% { transform: rotate(-5deg); }
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #c2c9d2; display: inline-block; margin-right: 5px; }
+  .dot.on { background: var(--green); box-shadow: 0 0 5px rgba(26,127,55,.5); }
+  .dot.err { background: var(--red); }
+  .dot.busy { background: var(--yellow); }
+  #connState { color: var(--dim); min-width: 90px; }
+
+  .chips { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; align-items: center; }
+  .chip { background: var(--panel2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .chip b { color: var(--text); font-weight: 600; }
+
+  .configbar { display: flex; gap: 8px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--border); align-items: center; flex-wrap: wrap; }
+  .configbar label { color: var(--dim); font-size: 11px; }
+  input, textarea { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 9px; font-size: 12px; font-family: var(--mono); }
+  input:focus, textarea:focus { outline: 2px solid rgba(9,105,218,.35); outline-offset: -1px; }
+  button { display: inline-flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 11px; font-size: 12px; font-family: inherit; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s, color .15s; }
+  button:hover { border-color: #b3bcc7; background: var(--panel2); }
+  button.primary { background: var(--black); border-color: var(--black); color: #fff; }
+  button.primary:hover { background: #000; border-color: #000; }
+  button.warn { color: var(--red); border-color: #efc4c8; }
+  button.warn:hover { background: #fcf1f2; border-color: var(--red); }
+  button:disabled { opacity: .4; cursor: default; pointer-events: none; }
+  #endpoint { width: 320px; } #apiKey { width: 250px; } #threadId { width: 230px; color: var(--dim); background: var(--panel2); }
+
+  main { flex: 1; display: flex; min-height: 0; }
+  .left { width: 480px; min-width: 360px; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--panel); }
+  .right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  .section { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); margin: 0 0 7px; font-weight: 600; }
+  textarea { width: 100%; resize: vertical; }
+  #prompt { height: 64px; }
+  #selectedEl { height: 44px; color: var(--yellow); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .hint { color: var(--dim); font-size: 11px; }
+
+  #log { flex: 1; overflow-y: auto; padding: 8px 14px; font-family: var(--mono); font-size: 11.5px; background: var(--panel); }
+  .entry { margin-bottom: 8px; border-left: 3px solid var(--border); padding-left: 8px; }
+  .entry .meta { color: var(--dim); font-size: 10.5px; margin-bottom: 2px; }
+  .entry pre { margin: 0; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto; }
+  .entry.partial { border-color: var(--accent); }
+  .entry.complete { border-color: var(--green); }
+  .entry.values { border-color: var(--purple); }
+  .entry.bundle { border-color: var(--yellow); }
+  .entry.error { border-color: var(--red); } .entry.error pre { color: var(--red); }
+  .entry.info { border-color: var(--border); color: var(--dim); }
+  .badge { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 10px; margin-right: 6px; background: var(--panel2); border: 1px solid var(--border); }
+
+  .bundlebox { border-top: 1px solid var(--border); padding: 10px 14px; background: var(--panel); }
+  #bundleCode { height: 110px; font-size: 11px; background: var(--panel2); }
+
+  .urlbar { display: flex; gap: 8px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); align-items: center; }
+  #pageUrl { flex: 1; }
+  #htmlSize { font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; }
+  #htmlSize b { color: var(--text); }
+  iframe { flex: 1; border: 0; background: #fff; }
+  #frameOverlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--dim); background: rgba(244,245,247,.8); font-size: 14px; }
+  .framewrap { flex: 1; position: relative; display: flex; }
+  .picking-banner { display: none; padding: 5px 12px; background: #fff8c5; color: var(--yellow); font-size: 12px; border-bottom: 1px solid #ecdf9a; }
+</style>
+</head>
+<body>
+
+<!-- inline icon set (lucide outlines) -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+  <symbol id="i-report" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></symbol>
+</svg>
+
+<header>
+  <h1>
+    <svg class="logo" viewBox="0 0 618 620" aria-label="Codi">
+      <circle class="eye" cx="229.354" cy="314.534" r="30.8235" fill="currentColor"/>
+      <circle class="eye" cx="383.471" cy="314.534" r="30.8235" fill="currentColor"/>
+      <path d="M523.182 314.112C523.643 284.775 518.25 256.824 508.127 231.285L594.091 197.211C608.614 233.851 616.296 273.861 615.641 315.565C614.985 357.269 606.05 397.018 590.382 433.184L505.531 396.425C516.452 371.217 522.72 343.449 523.182 314.112Z" fill="currentColor"/>
+      <path d="M92.4707 314.71C92.4707 344.051 98.3021 371.914 108.825 397.29L23.4072 432.711C8.30971 396.304 6.66967e-06 356.419 1.0316e-05 314.71C1.39623e-05 273.001 8.30973 233.117 23.4072 196.709L108.825 232.13C98.3021 257.506 92.4707 285.369 92.4707 314.71Z" fill="currentColor"/>
+      <path d="M308.186 526.639C337.527 526.592 365.38 520.715 390.739 510.151L426.299 595.511C389.916 610.668 350.045 619.042 308.336 619.11C266.627 619.178 226.729 610.933 190.297 595.895L225.579 510.419C250.972 520.901 278.845 526.687 308.186 526.639Z" fill="currentColor"/>
+      <path d="M308.098 92.933C278.757 92.8178 250.872 98.5399 225.455 108.963L190.369 23.407C226.835 8.45247 266.752 0.299318 308.461 0.462965C350.17 0.626611 390.021 9.09274 426.369 24.333L390.613 109.611C365.279 98.9887 337.439 93.0481 308.098 92.933Z" fill="currentColor"/>
+      <path d="M553 309.121C553 172.934 442.599 62.5333 306.412 62.5333C170.225 62.5333 59.8242 172.934 59.8242 309.121C59.8242 445.308 170.225 555.709 306.412 555.709C442.599 555.709 553 445.308 553 309.121ZM583.824 309.121C583.824 462.332 459.622 586.533 306.412 586.533C153.202 586.533 29 462.332 29 309.121C29 155.911 153.202 31.7091 306.412 31.7091C459.622 31.7091 583.824 155.911 583.824 309.121Z" fill="currentColor"/>
+    </svg>
+    Codi API Tester
+  </h1>
+  <span><span class="dot" id="connDot"></span><span id="connState">disconnected</span></span>
+  <div class="chips">
+    <span class="chip">connect <b id="mConnect">–</b></span>
+    <span class="chip">first event <b id="mFirst">–</b></span>
+    <span class="chip">bundle <b id="mBundle">–</b></span>
+    <span class="chip">msgs <b id="mMsgs">0</b></span>
+    <span class="chip">errors <b id="mErrs">0</b></span>
+    <button id="reportBtn" title="Download a session report (Markdown) for later analysis"><svg class="icon"><use href="#i-report"/></svg>Report</button>
+  </div>
+</header>
+
+<div class="configbar">
+  <label>Endpoint</label><input id="endpoint" value="wss://api.codi-agent.com/partner/intent/agent">
+  <label>API key</label><input id="apiKey" type="password" placeholder="sk-codi-…">
+  <label>Thread</label><input id="threadId" readonly title="thread_id for this conversation">
+  <button id="newThreadBtn" title="New thread (reconnects)"><svg class="icon"><use href="#i-refresh"/></svg>New</button>
+  <button id="connectBtn"><svg class="icon"><use href="#i-power"/></svg><span>Connect</span></button>
+  <button id="healthBtn" title="Open a throwaway connection and measure handshake time"><svg class="icon"><use href="#i-activity"/></svg>Health check</button>
+</div>
+
+<main>
+  <div class="left">
+    <div class="section">
+      <h2>Prompt</h2>
+      <textarea id="prompt" placeholder="e.g. I need the product grid to be 2 columns across all screen widths"></textarea>
+      <div class="row" style="margin-top:7px">
+        <button id="sendBtn"><svg class="icon"><use href="#i-play"/></svg>Send (rpc <span id="rpcLabel">1</span>)</button>
+        <span class="hint" id="stepHint"></span>
+      </div>
+    </div>
+    <div class="section">
+      <h2>Selected element <span style="text-transform:none">(optional → targeted-changes mode)</span></h2>
+      <textarea id="selectedEl" placeholder="empty = whole-page mode"></textarea>
+      <div class="row" style="margin-top:7px">
+        <button id="pickBtn"><svg class="icon"><use href="#i-crosshair"/></svg><span>Pick from page</span></button>
+        <button id="clearPickBtn"><svg class="icon"><use href="#i-x"/></svg>Clear</button>
+        <span class="hint" id="pickHint"></span>
+      </div>
+    </div>
+    <div id="log"></div>
+    <div class="bundlebox">
+      <h2>Bundle <span id="bundleMeta" style="text-transform:none"></span></h2>
+      <textarea id="bundleCode" placeholder="The generated code bundle lands here — editable before applying."></textarea>
+      <div class="row" style="margin-top:7px">
+        <button id="applyBtn"><svg class="icon"><use href="#i-zap"/></svg>Apply to page</button>
+        <button id="copyBtn"><svg class="icon"><use href="#i-copy"/></svg>Copy</button>
+        <button id="reloadBtn" class="warn" title="Reload the iframe to undo applied changes"><svg class="icon"><use href="#i-undo"/></svg>Reset page</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="urlbar">
+      <input id="pageUrl" placeholder="https://example.com — load a real site to test against">
+      <span id="htmlSize"></span>
+      <button id="loadBtn"><svg class="icon"><use href="#i-arrow-right"/></svg>Load page</button>
+    </div>
+    <div class="picking-banner" id="pickBanner">Picking mode — click an element in the page below (Esc to cancel)</div>
+    <div class="framewrap">
+      <iframe id="frame" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+      <div id="frameOverlay">No page loaded</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const frame = $('frame');
+
+// ---------- state ----------
+let ws = null;
+let rpcId = 1;
+let pageReady = false;
+let inFlight = false;
+let picking = false;
+let metrics = { msgs: 0, errs: 0 };
+let pending = {};            // rpcId -> { sentAt, firstEventAt, logEl }
+let lastRpc = null;
+let lastBundleRpc = null;
+let bridgeReqId = 1;
+let bridgeWaiters = {};      // bridge request id -> resolve fn
+
+// ---------- session recording (feeds the report) ----------
+const session = {
+  startedAt: new Date().toISOString(),
+  endpoint: null,
+  threads: [],
+  pages: [],     // {t, url, title, htmlBytes}
+  health: [],    // {t, ok, detail}
+  requests: {},  // rpcId -> {t, thread, prompt, mode, htmlBytes, ...}
+  events: [],    // {t, kind, label, content}
+};
+
+// ---------- persistence ----------
+for (const id of ['endpoint', 'apiKey', 'pageUrl']) {
+  const saved = localStorage.getItem('codi.' + id);
+  if (saved) $(id).value = saved;
+  $(id).addEventListener('change', () => localStorage.setItem('codi.' + id, $(id).value));
+}
+$('threadId').value = crypto.randomUUID();
+session.threads.push($('threadId').value);
+
+// ---------- guided flow ----------
+// One primary (black) button at a time = the next step. Buttons whose
+// prerequisites aren't met are disabled.
+function updateFlow() {
+  const hasKey = !!$('apiKey').value.trim();
+  const hasUrl = !!$('pageUrl').value.trim();
+  const hasPrompt = !!$('prompt').value.trim();
+  const hasBundle = !!$('bundleCode').value.trim();
+
+  $('connectBtn').disabled = !hasKey;
+  $('healthBtn').disabled = !hasKey;
+  $('loadBtn').disabled = !hasUrl;
+  $('sendBtn').disabled = !hasKey || !pageReady || !hasPrompt || inFlight;
+  $('pickBtn').disabled = !pageReady || inFlight;
+  $('applyBtn').disabled = !hasBundle || !pageReady;
+  $('copyBtn').disabled = !hasBundle;
+  $('reloadBtn').disabled = !pageReady;
+
+  let step, hint;
+  if (!hasKey)            { step = null;       hint = 'step 1 — paste your API key in the top bar'; }
+  else if (!pageReady)    { step = 'loadBtn';  hint = 'step 2 — load a site on the right'; }
+  else if (inFlight)      { step = null;       hint = 'waiting for the agent…'; }
+  else if (!hasPrompt)    { step = 'sendBtn';  hint = 'step 3 — write a prompt; HTML is grabbed automatically'; }
+  else if (!hasBundle)    { step = 'sendBtn';  hint = 'step 3 — send it'; }
+  else                    { step = 'applyBtn'; hint = 'step 4 — apply the bundle to the page, or send a follow-up'; }
+
+  for (const id of ['loadBtn', 'sendBtn', 'applyBtn'])
+    $(id).classList.toggle('primary', id === step);
+  $('stepHint').textContent = hint;
+}
+for (const id of ['apiKey', 'prompt', 'pageUrl', 'bundleCode'])
+  $(id).addEventListener('input', updateFlow);
+
+// ---------- logging ----------
+function log(kind, label, content, metaExtra) {
+  const e = document.createElement('div');
+  e.className = 'entry ' + kind;
+  const time = new Date().toLocaleTimeString();
+  e.innerHTML = `<div class="meta"><span class="badge">${label}</span>${time}${metaExtra ? ' · ' + metaExtra : ''}</div><pre></pre>`;
+  const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+  e.querySelector('pre').textContent = text;
+  $('log').appendChild(e);
+  $('log').scrollTop = $('log').scrollHeight;
+  session.events.push({ t: new Date().toISOString(), kind, label, content: text.slice(0, 4000) });
+  return e;
+}
+function setMetric(id, val) { $(id).textContent = val; }
+function fmtMs(ms) { return ms < 1000 ? Math.round(ms) + 'ms' : (ms / 1000).toFixed(1) + 's'; }
+function fmtBytes(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'; }
+function setHtmlSize(bytes) {
+  $('htmlSize').innerHTML = bytes == null ? '' : `HTML <b>${fmtBytes(bytes)}</b>`;
+}
+
+// ---------- websocket ----------
+let lastConnectMs = null;
+
+function setConn(state, cls) {
+  $('connState').textContent = state;
+  $('connDot').className = 'dot ' + (cls || '');
+  $('connectBtn').querySelector('span').textContent = ws && ws.readyState <= 1 ? 'Disconnect' : 'Connect';
+}
+
+function connect() {
+  return new Promise((resolve, reject) => {
+    const key = $('apiKey').value.trim();
+    if (!key) { log('error', 'config', 'API key is empty'); return reject(new Error('no key')); }
+    session.endpoint = $('endpoint').value.trim();
+    const url = `${session.endpoint}?thread_id=${$('threadId').value}&access_token=${encodeURIComponent(key)}`;
+    setConn('connecting…', 'busy');
+    const t0 = performance.now();
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+      lastConnectMs = performance.now() - t0;
+      setMetric('mConnect', fmtMs(lastConnectMs));
+      setConn('connected', 'on');
+      log('info', 'ws', `connected in ${fmtMs(lastConnectMs)} · thread ${$('threadId').value.slice(0, 8)}…`);
+      resolve();
+    };
+    ws.onerror = () => {
+      metrics.errs++; setMetric('mErrs', metrics.errs);
+      setConn('error', 'err');
+      log('error', 'ws', 'WebSocket error (check key / endpoint / network — details in devtools)');
+      reject(new Error('ws error'));
+    };
+    ws.onclose = (e) => {
+      setConn('disconnected');
+      log('info', 'ws', `closed (code ${e.code}${e.reason ? ' — ' + e.reason : ''})`);
+      ws = null;
+    };
+    ws.onmessage = onWsMessage;
+  });
+}
+
+function extractText(d) {
+  // best-effort text extraction from a message object for compact display
+  if (d == null) return '';
+  if (typeof d === 'string') return d;
+  if (typeof d.content === 'string') return d.content;
+  if (Array.isArray(d.content)) return d.content.map(b => b.text || b.content || '').join('');
+  if (typeof d.text === 'string') return d.text;
+  return JSON.stringify(d, null, 2);
+}
+
+function onWsMessage(event) {
+  metrics.msgs++; setMetric('mMsgs', metrics.msgs);
+  let msg;
+  try { msg = JSON.parse(event.data); }
+  catch { return log('error', 'parse', 'Non-JSON frame: ' + String(event.data).slice(0, 400)); }
+
+  const id = msg.rpcId ?? lastRpc;
+  const p = pending[id];
+  const req = session.requests[id];
+  if (req) req.events++;
+  if (p && !p.firstEventAt) {
+    p.firstEventAt = performance.now();
+    const dt = p.firstEventAt - p.sentAt;
+    setMetric('mFirst', fmtMs(dt));
+    if (req) req.firstEventMs = Math.round(dt);
+  }
+  const since = p ? ' · +' + fmtMs(performance.now() - p.sentAt) : '';
+
+  if (msg.type === 'partial-response') {
+    const { event: agentEvent, data } = msg.result || {};
+    if (agentEvent === 'messages/partial') {
+      // live-update a single entry per rpc instead of spamming the log
+      const text = extractText(Array.isArray(data) ? data[0] : data);
+      if (p) {
+        if (!p.liveEl) p.liveEl = log('partial', 'messages/partial', '', 'rpc ' + id);
+        p.liveEl.querySelector('pre').textContent = text;
+        p.liveEl.querySelector('.meta').innerHTML = `<span class="badge">messages/partial</span>rpc ${id}${since} · streaming…`;
+        $('log').scrollTop = $('log').scrollHeight;
+      } else log('partial', 'messages/partial', text, since);
+    } else if (agentEvent === 'messages/complete') {
+      if (p && p.liveEl) { p.liveEl.remove(); p.liveEl = null; }
+      log('complete', 'messages/complete', extractText(Array.isArray(data) ? data[0] : data), 'rpc ' + id + since);
+    } else if (agentEvent === 'values') {
+      log('values', 'values', data, 'rpc ' + id + since);
+    } else {
+      log('values', agentEvent || 'partial-response', data ?? msg, 'rpc ' + id + since);
+    }
+  } else if (msg.type === 'response') {
+    if (msg.result?.error) {
+      metrics.errs++; setMetric('mErrs', metrics.errs);
+      if (req) req.error = typeof msg.result.error === 'string' ? msg.result.error : JSON.stringify(msg.result.error);
+      log('error', 'error', msg.result.error, 'rpc ' + id + since);
+    } else {
+      const data = msg.result?.data;
+      if (p) {
+        const dt = performance.now() - p.sentAt;
+        setMetric('mBundle', fmtMs(dt));
+        if (req) req.bundleMs = Math.round(dt);
+      }
+      log('bundle', 'bundle', typeof data === 'string' ? data.slice(0, 1500) + (data.length > 1500 ? `\n… (${data.length} chars total — full code in Bundle box)` : '') : data, 'rpc ' + id + since);
+      loadBundle(data, id);
+    }
+    if (p) { delete pending[id]; }
+    inFlight = false;
+    updateFlow();
+  } else {
+    log('info', msg.type || 'message', msg, since);
+  }
+}
+
+// ---------- bundle ----------
+function loadBundle(data, id) {
+  let code = null;
+  if (typeof data === 'string') code = data;
+  else if (data && typeof data === 'object') {
+    for (const k of ['code', 'bundle', 'script', 'js', 'content', 'output']) {
+      if (typeof data[k] === 'string') { code = data[k]; break; }
+    }
+    if (!code) code = '/* bundle was an object — raw JSON below; edit down to runnable JS if needed */\n' + JSON.stringify(data, null, 2);
+  }
+  $('bundleCode').value = code || '';
+  $('bundleMeta').textContent = `· rpc ${id} · ${fmtBytes((code || '').length)}`;
+  const req = session.requests[id];
+  if (req) { req.bundleBytes = (code || '').length; req.bundle = code || ''; }
+  updateFlow();
+}
+
+$('applyBtn').onclick = () => {
+  const code = $('bundleCode').value.trim();
+  if (!code) return log('error', 'apply', 'Bundle box is empty');
+  if (!pageReady) return log('error', 'apply', 'No page loaded in the preview frame');
+  frame.contentWindow.postMessage({ __codi: true, type: 'apply-bundle', code, id: 'apply-' + Date.now() }, '*');
+};
+$('copyBtn').onclick = () => navigator.clipboard.writeText($('bundleCode').value).then(() => log('info', 'copy', 'Bundle copied to clipboard'));
+$('reloadBtn').onclick = () => loadPage();
+
+// ---------- page / iframe bridge ----------
+function stopPicking() {
+  picking = false;
+  $('pickBanner').style.display = 'none';
+  $('pickBtn').querySelector('span').textContent = 'Pick from page';
+  if (pageReady) frame.contentWindow.postMessage({ __codi: true, type: 'pick-stop' }, '*');
+}
+
+function loadPage() {
+  const url = $('pageUrl').value.trim();
+  if (!url) return log('error', 'page', 'Enter a URL first');
+  pageReady = false;
+  stopPicking();
+  setHtmlSize(null);
+  $('frameOverlay').style.display = 'flex';
+  $('frameOverlay').textContent = 'Loading ' + url + ' …';
+  frame.src = '/proxy?url=' + encodeURIComponent(url);
+  updateFlow();
+}
+$('loadBtn').onclick = loadPage;
+$('pageUrl').addEventListener('keydown', e => { if (e.key === 'Enter') loadPage(); });
+
+function getPageHTML() {
+  return new Promise((resolve, reject) => {
+    if (!pageReady) return reject(new Error('no page loaded'));
+    const id = bridgeReqId++;
+    bridgeWaiters[id] = resolve;
+    frame.contentWindow.postMessage({ __codi: true, type: 'get-html', id }, '*');
+    setTimeout(() => { if (bridgeWaiters[id]) { delete bridgeWaiters[id]; reject(new Error('page did not respond (bridge timeout)')); } }, 5000);
+  });
+}
+
+window.addEventListener('message', (e) => {
+  const msg = e.data;
+  if (!msg || !msg.__codi) return;
+  switch (msg.type) {
+    case 'ready': {
+      pageReady = true;
+      $('frameOverlay').style.display = 'none';
+      log('info', 'page', `loaded: ${msg.title || ''} (${msg.url})`);
+      const page = { t: new Date().toISOString(), url: msg.url, title: msg.title, htmlBytes: null };
+      session.pages.push(page);
+      // measure the capturable HTML right away so the size shows before any send
+      getPageHTML().then(html => { page.htmlBytes = html.length; setHtmlSize(html.length); }).catch(() => {});
+      updateFlow();
+      break;
+    }
+    case 'html':
+      if (bridgeWaiters[msg.id]) { bridgeWaiters[msg.id](msg.html); delete bridgeWaiters[msg.id]; }
+      break;
+    case 'picked':
+      $('selectedEl').value = msg.html;
+      $('pickHint').textContent = msg.selector;
+      stopPicking();
+      log('info', 'pick', `selected <${msg.selector}> (${fmtBytes(msg.html.length)})`);
+      break;
+    case 'bundle-applied':
+      if (msg.ok) {
+        if (session.requests[lastBundleRpc]) session.requests[lastBundleRpc].applied = true;
+        log('complete', 'apply', 'Bundle executed on the page — check the preview');
+      } else {
+        metrics.errs++; setMetric('mErrs', metrics.errs);
+        log('error', 'apply', 'Bundle threw: ' + msg.error);
+      }
+      break;
+    case 'page-error':
+      log('error', 'page', msg.error);
+      break;
+  }
+});
+
+$('pickBtn').onclick = () => {
+  if (!pageReady) return;
+  if (picking) return stopPicking();
+  picking = true;
+  $('pickBanner').style.display = 'block';
+  $('pickBtn').querySelector('span').textContent = 'Cancel picking';
+  frame.contentWindow.postMessage({ __codi: true, type: 'pick-start' }, '*');
+};
+$('clearPickBtn').onclick = () => { $('selectedEl').value = ''; $('pickHint').textContent = ''; };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && picking) stopPicking(); });
+
+// ---------- send ----------
+async function send() {
+  const prompt = $('prompt').value.trim();
+  if (!prompt) return log('error', 'send', 'Prompt is empty');
+
+  let html;
+  try { html = await getPageHTML(); }
+  catch (err) { return log('error', 'send', 'Could not capture page HTML: ' + err.message + ' — load a page on the right first.'); }
+  setHtmlSize(html.length);
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    try { await connect(); } catch { return; }
+  }
+
+  const id = String(rpcId++);
+  $('rpcLabel').textContent = rpcId;
+  lastRpc = id;
+  lastBundleRpc = id;
+  pending[id] = { sentAt: performance.now(), firstEventAt: null, liveEl: null };
+  setMetric('mFirst', '–'); setMetric('mBundle', '–');
+
+  const payload = { prompt, html };
+  const sel = $('selectedEl').value.trim();
+  if (sel) payload.selectedElementHTML = sel;
+
+  session.requests[id] = {
+    t: new Date().toISOString(), thread: $('threadId').value, prompt,
+    mode: sel ? 'targeted' : 'whole-page', htmlBytes: html.length,
+    selectedBytes: sel ? sel.length : 0, connectMs: lastConnectMs ? Math.round(lastConnectMs) : null,
+    firstEventMs: null, bundleMs: null, bundleBytes: null, events: 0, error: null, applied: false,
+    page: $('pageUrl').value.trim(),
+  };
+
+  ws.send(JSON.stringify({ type: 'call', rpcId: id, rpc: 'run', payload }));
+  inFlight = true;
+  updateFlow();
+  log('info', 'sent', `rpc ${id} · "${prompt.slice(0, 80)}" · html ${fmtBytes(html.length)}${sel ? ' · targeted mode (' + fmtBytes(sel.length) + ' selected)' : ' · whole-page mode'}`);
+}
+$('sendBtn').onclick = send;
+$('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); });
+
+// ---------- connection buttons ----------
+$('connectBtn').onclick = () => {
+  if (ws && ws.readyState <= 1) ws.close();
+  else connect().catch(() => {});
+};
+$('newThreadBtn').onclick = () => {
+  $('threadId').value = crypto.randomUUID();
+  session.threads.push($('threadId').value);
+  rpcId = 1; $('rpcLabel').textContent = 1;
+  if (ws && ws.readyState <= 1) { ws.close(); connect().catch(() => {}); }
+  log('info', 'thread', 'new thread: ' + $('threadId').value);
+};
+
+// Health check: throwaway connection, measures handshake, reports close code.
+$('healthBtn').onclick = () => {
+  const key = $('apiKey').value.trim();
+  if (!key) return log('error', 'health', 'API key is empty');
+  const url = `${$('endpoint').value.trim()}?thread_id=${crypto.randomUUID()}&access_token=${encodeURIComponent(key)}`;
+  const t0 = performance.now();
+  const probe = new WebSocket(url);
+  const record = (ok, detail) => session.health.push({ t: new Date().toISOString(), ok, detail });
+  const timer = setTimeout(() => { probe.close(); log('error', 'health', 'DOWN — no response within 10s'); record(false, 'timeout 10s'); }, 10000);
+  probe.onopen = () => {
+    clearTimeout(timer);
+    const detail = `handshake + auth accepted in ${fmtMs(performance.now() - t0)}`;
+    log('complete', 'health', 'UP — ' + detail);
+    record(true, detail);
+    probe.close(1000);
+  };
+  probe.onclose = (e) => {
+    if (e.code !== 1000 && e.code !== 1005) { log('error', 'health', `closed with code ${e.code}${e.reason ? ' — ' + e.reason : ''} (4xx-style codes usually mean bad key)`); record(false, 'close code ' + e.code); }
+  };
+  probe.onerror = () => { clearTimeout(timer); log('error', 'health', 'DOWN or unauthorized — connection failed after ' + fmtMs(performance.now() - t0)); record(false, 'connection failed'); };
+};
+
+// ---------- session report (Markdown) ----------
+function generateReport() {
+  const reqs = Object.entries(session.requests).map(([id, r]) => ({ id, ...r }));
+  const ok = reqs.filter(r => r.bundleMs != null && !r.error);
+  const avg = (arr, k) => arr.length ? Math.round(arr.reduce((s, r) => s + (r[k] || 0), 0) / arr.length) : null;
+  const now = new Date();
+  const cell = s => String(s ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+  const oneLine = (s, n) => cell(s).slice(0, n);
+
+  const md = [];
+  md.push('# Codi API session report', '');
+  md.push(`- **Session started:** ${session.startedAt}`);
+  md.push(`- **Report generated:** ${now.toISOString()}`);
+  md.push(`- **Endpoint:** \`${session.endpoint || $('endpoint').value}\``);
+  md.push(`- **Threads used:** ${session.threads.length}`);
+  md.push(`- **Pages loaded:** ${session.pages.map(p => p.url).join(', ') || '—'}`);
+  md.push(`- **Requests:** ${reqs.length} sent · ${ok.length} succeeded · ${reqs.length - ok.length} failed/incomplete`);
+  if (ok.length) {
+    md.push(`- **Avg first event:** ${fmtMs(avg(ok, 'firstEventMs'))}`);
+    md.push(`- **Avg bundle time:** ${fmtMs(avg(ok, 'bundleMs'))}`);
+  }
+  md.push(`- **Total WS messages:** ${metrics.msgs} · **errors:** ${metrics.errs}`, '');
+
+  md.push('## Health checks', '');
+  if (session.health.length) {
+    for (const h of session.health) md.push(`- ${h.ok ? '✅ UP' : '❌ DOWN'} — ${h.detail} (${h.t})`);
+  } else md.push('_none run_');
+  md.push('');
+
+  md.push('## Requests', '');
+  if (reqs.length) {
+    md.push('| rpc | time | prompt | mode | page | HTML | first event | bundle time | bundle size | events | result |');
+    md.push('|---|---|---|---|---|---|---|---|---|---|---|');
+    for (const r of reqs) {
+      const result = r.error ? `error: ${oneLine(r.error, 120)}` : r.applied ? 'applied ✓' : r.bundleMs != null ? 'ok' : 'incomplete';
+      md.push(`| ${r.id} | ${r.t.slice(11, 19)} | ${oneLine(r.prompt, 100)} | ${r.mode} | ${cell(r.page)} | ${fmtBytes(r.htmlBytes || 0)} | ${r.firstEventMs != null ? fmtMs(r.firstEventMs) : '—'} | ${r.bundleMs != null ? fmtMs(r.bundleMs) : '—'} | ${r.bundleBytes != null ? fmtBytes(r.bundleBytes) : '—'} | ${r.events} | ${result} |`);
+    }
+  } else md.push('_none sent_');
+  md.push('');
+
+  md.push('## Bundles', '');
+  const withBundle = reqs.filter(r => r.bundle);
+  if (withBundle.length) {
+    for (const r of withBundle) {
+      md.push(`### rpc ${r.id} — ${fmtBytes(r.bundleBytes)} (${r.bundleMs != null ? fmtMs(r.bundleMs) : '?'})`, '');
+      md.push('````js', r.bundle, '````', '');
+    }
+  } else md.push('_none received_', '');
+
+  md.push('## Event log', '');
+  for (const e of session.events) {
+    md.push(`- \`${e.t.slice(11, 19)}\` **${e.label}** (${e.kind}) — ${oneLine(e.content, 300)}`);
+  }
+  md.push('');
+
+  md.push('## Raw session data', '', '````json', JSON.stringify(session, null, 2), '````', '');
+
+  const stamp = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([md.join('\n')], { type: 'text/markdown' }));
+  a.download = `codi-report-${stamp}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  log('info', 'report', `report downloaded: codi-report-${stamp}.md (${reqs.length} requests, ${session.events.length} log events)`);
+}
+$('reportBtn').onclick = generateReport;
+
+updateFlow();
+log('info', 'hi', 'Follow the highlighted button: API key → load a site → prompt → send → apply the bundle. "Report" downloads the full session as Markdown for later analysis.');
+</script>
+</body>
+</html>
