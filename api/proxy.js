@@ -7,16 +7,27 @@ module.exports = async (req, res) => {
   if (!target) return res.status(400).send('Missing ?url= parameter');
   if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
 
+  // Forward method + body so the bridge's rerouted API calls (POST/GraphQL
+  // etc.) work, not just page loads. Vercel pre-parses bodies, so re-serialize.
+  const method = req.method || 'GET';
+  let body;
+  if (method !== 'GET' && method !== 'HEAD' && req.body != null) {
+    body = Buffer.isBuffer(req.body) || typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+  }
+
   let upstream;
   try {
     upstream = await fetch(target, {
       redirect: 'follow',
+      method,
+      body,
       headers: {
         'User-Agent':
           req.headers['user-agent'] ||
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        ...(req.headers['content-type'] ? { 'Content-Type': req.headers['content-type'] } : {}),
       },
     });
   } catch (err) {

@@ -40,6 +40,40 @@
     }
   } catch (e) { /* leave the proxy URL as-is */ }
 
+  // Route the page's own API calls through our proxy. Relative fetch/XHR URLs
+  // resolve against the injected <base> to the real origin — a cross-origin
+  // request from this document that CORS blocks. Going via /proxy keeps them
+  // same-origin here, and the proxy forwards method + body server-side.
+  var TARGET_ORIGIN = (function () {
+    try { return new URL(document.baseURI).origin; } catch (e) { return null; }
+  })();
+
+  function toProxy(u) {
+    return location.origin + '/proxy?url=' + encodeURIComponent(u.href);
+  }
+
+  if (TARGET_ORIGIN && TARGET_ORIGIN !== location.origin) {
+    var realFetch = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+      try {
+        var u = new URL(typeof input === 'string' || input instanceof URL ? String(input) : input.url, document.baseURI);
+        if (u.origin === TARGET_ORIGIN) {
+          input = (typeof input === 'string' || input instanceof URL) ? toProxy(u) : new Request(toProxy(u), input);
+        }
+      } catch (e) { /* pass through untouched */ }
+      return realFetch(input, init);
+    };
+
+    var realOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (method, url) {
+      try {
+        var u = new URL(url, document.baseURI);
+        if (u.origin === TARGET_ORIGIN) arguments[1] = toProxy(u);
+      } catch (e) { /* pass through untouched */ }
+      return realOpen.apply(this, arguments);
+    };
+  }
+
   var PICK_OUTLINE = '2px solid #e0b341';
   var picking = false;
   var hovered = null;
@@ -136,5 +170,11 @@
     post({ type: 'page-error', error: String(e.message) + ' @ ' + String(e.filename || '') + ':' + (e.lineno || '') });
   });
 
-  post({ type: 'ready', url: location.href, title: document.title });
+  // Announce readiness only once the document is fully parsed — the bridge
+  // runs at the top of <head>, and an immediate capture would see partial HTML.
+  function announce() {
+    post({ type: 'ready', url: location.href, title: document.title });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', announce);
+  else announce();
 })();

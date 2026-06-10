@@ -26,21 +26,38 @@ function send(res, status, body, headers = {}) {
   res.end(body);
 }
 
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 async function handleProxy(req, res, query) {
   let target = query.get('url');
   if (!target) return send(res, 400, 'Missing ?url= parameter');
   if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
 
+  // Forward method + body so the bridge's rerouted API calls (POST/GraphQL
+  // etc.) work, not just page loads.
+  const method = req.method || 'GET';
+  const body = method === 'GET' || method === 'HEAD' ? undefined : await readBody(req);
+
   let upstream;
   try {
     upstream = await fetch(target, {
       redirect: 'follow',
+      method,
+      body,
       headers: {
         'User-Agent':
           req.headers['user-agent'] ||
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        ...(req.headers['content-type'] ? { 'Content-Type': req.headers['content-type'] } : {}),
       },
     });
   } catch (err) {
