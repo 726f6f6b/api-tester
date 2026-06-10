@@ -42,21 +42,21 @@ The **Report** button (top right) downloads a Markdown file with everything from
 - `public/index.html` — the dashboard UI and WebSocket client.
 - `public/bridge.js` — injected into proxied pages; handles HTML capture, the element picker, bundle execution, and error reporting back to the dashboard via `postMessage`.
 
-## Deploying (Cloudflare Workers)
+## Deploying (Vercel)
 
-[worker.js](worker.js) + [wrangler.jsonc](wrangler.jsonc) mirror the local server for Cloudflare: the UI is served as static assets and `/proxy` runs in the Worker. The Codi WebSocket goes browser → Codi directly, so no server-side WS is needed.
+The Vercel layout mirrors the local server: the UI in `public/` is served as static files ([vercel.json](vercel.json) sets it as the output directory), `/proxy` runs as a serverless function ([api/proxy.js](api/proxy.js), rewritten from `/proxy`), and [middleware.js](middleware.js) gates everything behind basic auth. The Codi WebSocket goes browser → Codi directly, so no server-side WS is needed.
+
+Either connect the GitHub repo in the Vercel dashboard (deploy-on-push), or from the CLI:
 
 ```sh
-npx wrangler login                          # once
-npx wrangler secret put TESTER_PASSWORD     # gate the app (recommended)
-npm run deploy                              # = wrangler deploy
+npx vercel login    # once
+npx vercel          # preview deploy + link project
+npm run deploy      # = vercel --prod
 ```
 
-You get a `https://codi-api-tester.<account>.workers.dev` URL. Local Worker dev: `npm run dev:cf`.
+**Set the `TESTER_PASSWORD` environment variable in Vercel project settings on any public deployment.** It puts the whole app behind HTTP basic auth (username `codi`, password = the value you set). Without it, `/proxy` is an open proxy anyone could abuse. Codi API keys are never stored server-side — each user pastes their own key, which lives only in their browser's localStorage.
 
-**Set the `TESTER_PASSWORD` secret on any public deployment.** It puts the whole app behind HTTP basic auth (username `codi`, password = the value you set). Without it, `/proxy` is an open proxy anyone could abuse. Codi API keys are never stored server-side — each user pastes their own key, which lives only in their browser's localStorage.
-
-The plain Node server ([server.js](server.js)) also deploys anywhere Node 18+ runs (Render, Railway, a VPS): `npm start`, port from `PORT`, same `TESTER_PASSWORD` env var.
+The plain Node server ([server.js](server.js)) is for local use (`npm start`) and also deploys anywhere Node 18+ runs (Render, Railway, a VPS): port from `PORT`, same `TESTER_PASSWORD` env var.
 
 ## Caveats
 

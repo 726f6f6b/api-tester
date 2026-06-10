@@ -1,0 +1,70 @@
+// Vercel serverless function — the deployed equivalent of server.js's /proxy.
+// Fetches a target site, strips frame-blocking CSP, injects the bridge inline.
+// Exposed at /proxy via the rewrite in vercel.json.
+
+module.exports = async (req, res) => {
+  let target = req.query.url;
+  if (!target) return res.status(400).send('Missing ?url= parameter');
+  if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
+
+  let upstream;
+  try {
+    upstream = await fetch(target, {
+      redirect: 'follow',
+      headers: {
+        'User-Agent':
+          req.headers['user-agent'] ||
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+  } catch (err) {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    return res.status(502).send(`Proxy fetch failed for ${target}\n\n${err.message}`);
+  }
+
+  const finalUrl = upstream.url || target;
+  const contentType = upstream.headers.get('content-type') || '';
+
+  // Non-HTML resources: pass through untouched.
+  if (!contentType.includes('text/html')) {
+    res.setHeader('Content-Type', contentType || 'application/octet-stream');
+    return res.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
+  }
+
+  let html = await upstream.text();
+
+  // Strip CSP <meta> tags so the injected bridge script and bundle eval work.
+  html = html.replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/gi, '');
+
+  const injection = [];
+  // <base> so relative URLs (css/js/img) resolve against the real origin.
+  if (!/<base\s/i.test(html)) {
+    injection.push(`<base href="${finalUrl.replace(/"/g, '&quot;')}" data-codi-bridge="1">`);
+  }
+  // Bridge must be inlined: the <base> tag above would make a src="/bridge.js"
+  // reference resolve against the target site's origin, not this deployment.
+  // Fetched from our own origin, forwarding basic-auth so the middleware lets it through.
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const bridgeRes = await fetch(`${proto}://${req.headers.host}/bridge.js`, {
+    headers: req.headers.authorization ? { authorization: req.headers.authorization } : {},
+  });
+  const bridgeSrc = await bridgeRes.text();
+  injection.push(`<script data-codi-bridge="1">${bridgeSrc.replace(/<\/script/gi, '<\\/script')}</script>`);
+  const inject = injection.join('\n');
+
+  if (/<head[^>]*>/i.test(html)) {
+    html = html.replace(/<head[^>]*>/i, (m) => m + '\n' + inject);
+  } else if (/<html[^>]*>/i.test(html)) {
+    html = html.replace(/<html[^>]*>/i, (m) => m + '\n' + inject);
+  } else {
+    html = inject + '\n' + html;
+  }
+
+  // Deliberately omit X-Frame-Options / CSP headers so the page frames.
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('X-Proxied-From', finalUrl);
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(upstream.status).send(html);
+};
