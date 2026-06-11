@@ -83,6 +83,16 @@ RENDER_API_OPTS={"proxy":"residential","proxySticky":true}
 
 Even so, the hardest anti-bot walls (or logged-in/personalized pages) may not yield to any automated render — for those, capturing from the site's own tab is the only reliable route. `RENDER_API_OPTS` also accepts other provider options (`waitForSelector`, `blockAds`, etc.) merged into the request body.
 
+## Capture from a real tab (last-resort, works on anything)
+
+When even cloud render can't reach a page — sites behind a login, or the hardest bot walls — use **Capture tab** (next to Load page). You capture the page in your *own* browser, where it's fully loaded and signed in, then load that snapshot into the tester to preview Codi's changes.
+
+1. **One-time setup:** open the Capture dialog and drag the **Codi Capture** button to your bookmarks bar (or "copy bookmarklet" and make a bookmark from it). For CSP-strict sites that block bookmarklets, "copy console snippet" instead and paste it into the tab's DevTools console.
+2. **On the site:** open the page in another tab, sign in / pass any checks, then click the **Codi Capture** bookmark. It copies the live page (`{url, html}`) to your clipboard.
+3. **Back in the tester:** paste it into the dialog and load. The page renders as a static, script-free snapshot; Send and Apply work against it exactly like a proxied page.
+
+The captured HTML never touches the tester's server — the snapshot is assembled in your browser. (It is still sent to the Codi API when you hit Send, which is the point.) Because your real browser did the loading, this bypasses origin allowlists, CORS, and bot walls entirely.
+
 ## Caveats
 
 - Sites are proxied with a `<base>` tag so their assets load from the real origin — most sites render fine, but heavy SPAs that fetch same-origin APIs may partially break (their XHRs go to the real origin and can hit CORS). The HTML capture and bundle injection still work.

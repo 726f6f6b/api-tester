@@ -96,6 +96,21 @@
   #frameOverlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--dim); background: rgba(244,245,247,.8); font-size: 14px; }
   .framewrap { flex: 1; position: relative; display: flex; }
   .picking-banner { display: none; padding: 5px 12px; background: #fff8c5; color: var(--yellow); font-size: 12px; border-bottom: 1px solid #ecdf9a; }
+
+  .modal-bg { position: fixed; inset: 0; background: rgba(20,24,30,.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; width: 660px; max-width: 92vw; max-height: 88vh; overflow-y: auto; padding: 16px 20px 20px; box-shadow: 0 16px 48px rgba(0,0,0,.22); }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .modal-head h2 { margin: 0; font-size: 14px; }
+  .modal .steps { padding-left: 20px; margin: 12px 0; }
+  .modal .steps li { margin-bottom: 10px; }
+  .modal .steps li b { color: var(--text); }
+  #captureInput { width: 100%; height: 110px; margin: 4px 0 10px; }
+  .bookmarklet { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; background: var(--black); color: #fff; border-radius: 6px; text-decoration: none; cursor: grab; font-size: 12px; }
+  .bookmarklet:active { cursor: grabbing; }
+  button.mini { padding: 3px 8px; font-size: 11px; }
+  .iconbtn { border: 0; background: none; font-size: 20px; line-height: 1; color: var(--dim); padding: 0 4px; }
+  .iconbtn:hover { color: var(--text); background: none; border: 0; }
 </style>
 </head>
 <body>
@@ -114,6 +129,7 @@
   <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
   <symbol id="i-report" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></symbol>
   <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></symbol>
+  <symbol id="i-capture" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
 </svg>
 
 <header>
@@ -189,6 +205,7 @@
         <button id="modeRender" title="Render in a cloud headless browser at the site's real origin — use when a site doesn't load fully in proxy mode"><svg class="icon"><use href="#i-cloud"/></svg>Cloud render</button>
       </div>
       <button id="loadBtn"><svg class="icon"><use href="#i-arrow-right"/></svg>Load page</button>
+      <button id="captureBtn" title="Capture the page from your own browser tab — for logins / hard bot walls"><svg class="icon"><use href="#i-capture"/></svg>Capture tab</button>
     </div>
     <div class="picking-banner" id="pickBanner">Picking mode — click an element in the page below (Esc to cancel)</div>
     <div class="framewrap">
@@ -197,6 +214,30 @@
     </div>
   </div>
 </main>
+
+<div id="captureModal" class="modal-bg">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Capture from a real tab</h2>
+      <button id="captureClose" class="iconbtn" title="Close">×</button>
+    </div>
+    <p class="hint">For pages that proxy and cloud render can't reach — logged-in pages, or hard bot walls (Cloudflare/Incapsula). You capture the page in your <b>own</b> browser, where it's fully loaded and signed in, then load it here to preview Codi's changes against it.</p>
+    <ol class="steps">
+      <li><b>Set up once:</b> drag this to your bookmarks bar →
+        <a id="bmlet" class="bookmarklet" draggable="true"><svg class="icon"><use href="#i-capture"/></svg>Codi Capture</a>
+        &nbsp;<button id="copyBmlet" class="mini">copy bookmarklet</button>
+        <div class="hint" style="margin-top:5px">CSP-strict site? Use the console instead: <button id="copySnippet" class="mini">copy console snippet</button> then paste it in the tab's DevTools console.</div>
+      </li>
+      <li><b>On the site:</b> open your page in another tab (sign in / pass any checks so it's fully loaded), then click the <b>Codi Capture</b> bookmark. It copies the page to your clipboard.</li>
+      <li><b>Back here:</b> paste it below and load.</li>
+    </ol>
+    <textarea id="captureInput" placeholder="Paste the captured payload here (Cmd/Ctrl+V)"></textarea>
+    <div class="row">
+      <button id="captureLoad" class="primary"><svg class="icon"><use href="#i-arrow-right"/></svg>Load captured page</button>
+      <span class="hint" id="captureHint"></span>
+    </div>
+  </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -423,7 +464,10 @@ $('applyBtn').onclick = () => {
   frame.contentWindow.postMessage({ __codi: true, type: 'apply-bundle', code, id: 'apply-' + Date.now() }, '*');
 };
 $('copyBtn').onclick = () => navigator.clipboard.writeText($('bundleCode').value).then(() => log('info', 'copy', 'Bundle copied to clipboard'));
-$('reloadBtn').onclick = () => loadPage();
+$('reloadBtn').onclick = () => {
+  if (loadStartedMode === 'capture' && lastSnapshot) showSnapshot(lastSnapshot);
+  else loadPage();
+};
 
 // ---------- page / iframe bridge ----------
 function stopPicking() {
@@ -482,6 +526,71 @@ frame.addEventListener('load', () => {
     log('error', loadStartedMode === 'render' ? 'render' : 'proxy', msg);
   }, loadStartedMode === 'render' ? 1800 : 1200);
 });
+
+// ---------- capture from a real tab ----------
+// A bookmarklet / console snippet runs in the user's own tab (real origin, real
+// session, past any bot wall) and copies {url, html} to the clipboard. We load
+// that as a static, script-free snapshot — same preview/apply path as cloud render.
+let lastSnapshot = null;
+const captureBody = 'var p=JSON.stringify({url:location.href,html:document.documentElement.outerHTML});';
+const bookmarklet =
+  'javascript:(function(){' + captureBody +
+  'function d(){alert("Codi: copied "+Math.round(p.length/1024)+" KB. Paste it into the tester.");}' +
+  'try{var t=document.createElement("textarea");t.value=p;t.style.position="fixed";t.style.top="-9999px";' +
+  'document.body.appendChild(t);t.focus();t.select();document.execCommand("copy");t.remove();d();}' +
+  'catch(e){if(navigator.clipboard){navigator.clipboard.writeText(p).then(d);}else{alert("Copy failed: "+e.message);}}})();';
+const snippet =
+  '(function(){' + captureBody +
+  'try{copy(p)}catch(e){}' +
+  'console.log("%cCodi: copied "+Math.round(p.length/1024)+" KB to clipboard — paste it into the tester.","color:#1a7f37;font-weight:bold");})();';
+
+$('bmlet').href = bookmarklet;
+$('captureBtn').onclick = () => $('captureModal').classList.add('open');
+$('captureClose').onclick = () => $('captureModal').classList.remove('open');
+$('captureModal').onclick = (e) => { if (e.target === $('captureModal')) $('captureModal').classList.remove('open'); };
+$('copyBmlet').onclick = () => navigator.clipboard.writeText(bookmarklet).then(() => log('info', 'capture', 'bookmarklet copied — create a new bookmark and paste this as its URL'));
+$('copySnippet').onclick = () => navigator.clipboard.writeText(snippet).then(() => log('info', 'capture', 'console snippet copied — paste it in the site tab’s DevTools console'));
+
+async function buildSnapshot(html, baseUrl) {
+  const bridge = await fetch('/bridge.js').then(r => r.text());
+  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<script\b[^>]*\/>/gi, '');
+  html = html.replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/gi, '');
+  const parts = [];
+  if (baseUrl && !/<base\s/i.test(html)) parts.push(`<base href="${baseUrl.replace(/"/g, '&quot;')}" data-codi-bridge="1">`);
+  parts.push(`<script data-codi-bridge="1">${bridge.replace(/<\/script/gi, '<\\/script')}<\/script>`);
+  const inject = parts.join('\n');
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + '\n' + inject);
+  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + '\n' + inject);
+  return inject + '\n' + html;
+}
+
+function showSnapshot(snap, label) {
+  pageReady = false;
+  stopPicking();
+  setHtmlSize(null);
+  loadStartedMode = 'capture';
+  loadToken++;
+  $('frameOverlay').style.display = 'flex';
+  $('frameOverlay').textContent = 'Loading captured page…';
+  frame.removeAttribute('src');
+  frame.srcdoc = snap;
+  updateFlow();
+}
+
+$('captureLoad').onclick = async () => {
+  const raw = $('captureInput').value.trim();
+  if (!raw) { $('captureHint').textContent = 'Paste the captured payload first.'; return; }
+  let url = $('pageUrl').value.trim(), html = raw;
+  try { const o = JSON.parse(raw); if (o && o.html) { html = o.html; url = o.url || url; } } catch (e) { /* treat as raw HTML */ }
+  $('captureHint').textContent = 'Building snapshot…';
+  lastSnapshot = await buildSnapshot(html, url);
+  if (url) $('pageUrl').value = url;
+  showSnapshot(lastSnapshot);
+  $('captureModal').classList.remove('open');
+  $('captureInput').value = '';
+  $('captureHint').textContent = '';
+  log('info', 'capture', `loaded captured page (${fmtBytes(html.length)})${url ? ' from ' + url : ''}`);
+};
 
 function getPageHTML() {
   return new Promise((resolve, reject) => {
