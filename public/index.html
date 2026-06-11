@@ -222,6 +222,7 @@
       <button id="captureClose" class="iconbtn" title="Close">×</button>
     </div>
     <p class="hint">For pages that proxy and cloud render can't reach — logged-in pages, or hard bot walls (Cloudflare/Incapsula). You capture the page in your <b>own</b> browser, where it's fully loaded and signed in, then load it here to preview Codi's changes against it.</p>
+    <p class="hint" style="background:#eef6ff;border:1px solid #cfe2ff;border-radius:6px;padding:7px 10px;">⭐ Easiest: install the <b>Codi Capture</b> Chrome extension (in the repo's <code>extension/</code> folder) — then it's one toolbar click on any tab, no pasting. The bookmarklet below is the no-install alternative.</p>
     <ol class="steps">
       <li><b>Set up once:</b> drag this to your bookmarks bar →
         <a id="bmlet" class="bookmarklet" draggable="true"><svg class="icon"><use href="#i-capture"/></svg>Codi Capture</a>
@@ -577,20 +578,31 @@ function showSnapshot(snap, label) {
   updateFlow();
 }
 
+async function loadCapturedPayload(html, url, source) {
+  url = (url || $('pageUrl').value.trim());
+  lastSnapshot = await buildSnapshot(html, url);
+  if (url) $('pageUrl').value = url;
+  showSnapshot(lastSnapshot);
+  $('captureModal').classList.remove('open');
+  log('info', 'capture', `loaded captured page (${fmtBytes(html.length)})${url ? ' from ' + url : ''}${source ? ' · via ' + source : ''}`);
+}
+
 $('captureLoad').onclick = async () => {
   const raw = $('captureInput').value.trim();
   if (!raw) { $('captureHint').textContent = 'Paste the captured payload first.'; return; }
   let url = $('pageUrl').value.trim(), html = raw;
   try { const o = JSON.parse(raw); if (o && o.html) { html = o.html; url = o.url || url; } } catch (e) { /* treat as raw HTML */ }
   $('captureHint').textContent = 'Building snapshot…';
-  lastSnapshot = await buildSnapshot(html, url);
-  if (url) $('pageUrl').value = url;
-  showSnapshot(lastSnapshot);
-  $('captureModal').classList.remove('open');
+  await loadCapturedPayload(html, url);
   $('captureInput').value = '';
   $('captureHint').textContent = '';
-  log('info', 'capture', `loaded captured page (${fmtBytes(html.length)})${url ? ' from ' + url : ''}`);
 };
+
+// Receiver for the Codi Capture browser extension: it injects {url, html} into
+// this page (MAIN world) and calls this hook. If it arrives before this script
+// runs, it's stashed on __codiPendingCapture and picked up here.
+window.__codiReceiveCapture = (p) => { if (p && p.html) loadCapturedPayload(p.html, p.url, 'extension'); };
+if (window.__codiPendingCapture) { const p = window.__codiPendingCapture; window.__codiPendingCapture = null; window.__codiReceiveCapture(p); }
 
 function getPageHTML() {
   return new Promise((resolve, reject) => {
