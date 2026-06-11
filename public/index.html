@@ -66,6 +66,8 @@
   #selectedEl { height: 44px; color: var(--yellow); }
   .row { display: flex; gap: 8px; align-items: center; }
   .hint { color: var(--dim); font-size: 11px; }
+  .chk { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; cursor: pointer; }
+  .chk input { margin: 0; }
 
   #log { flex: 1; overflow-y: auto; padding: 8px 14px; font-family: var(--mono); font-size: 11.5px; background: var(--panel); }
   .entry { margin-bottom: 8px; border-left: 3px solid var(--border); padding-left: 8px; }
@@ -179,6 +181,7 @@
         <button id="sendBtn"><svg class="icon"><use href="#i-play"/></svg>Send (rpc <span id="rpcLabel">1</span>)</button>
         <span class="hint" id="stepHint"></span>
       </div>
+      <label class="chk" title="Inline external CSS rules + reflect form/UI state into the captured HTML. More complete for Codi, but a bigger payload."><input type="checkbox" id="fullCapture"> Full capture <span class="hint">— inline CSS &amp; form state (bigger, more complete)</span></label>
     </div>
     <div class="section">
       <h2>Selected element <span style="text-transform:none">(optional → targeted-changes mode)</span></h2>
@@ -500,6 +503,12 @@ function setMode(m) {
 $('modeProxy').onclick = () => setMode('proxy');
 $('modeRender').onclick = () => setMode('render');
 
+// Re-measure the HTML size chip when Full capture is toggled.
+$('fullCapture').addEventListener('change', () => {
+  if (!pageReady) return;
+  getPageHTML($('fullCapture').checked).then(html => setHtmlSize(html.length)).catch(() => {});
+});
+
 function loadPage() {
   const url = $('pageUrl').value.trim();
   if (!url) return log('error', 'page', 'Enter a URL first');
@@ -549,12 +558,15 @@ $('captureClose').onclick = () => $('captureModal').classList.remove('open');
 $('captureModal').onclick = (e) => { if (e.target === $('captureModal')) $('captureModal').classList.remove('open'); };
 
 async function buildSnapshot(html, baseUrl) {
-  const bridge = await fetch('/bridge.js').then(r => r.text());
+  const [core, bridge] = await Promise.all([
+    fetch('/capture-core.js').then(r => r.text()),
+    fetch('/bridge.js').then(r => r.text()),
+  ]);
   html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<script\b[^>]*\/>/gi, '');
   html = html.replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/gi, '');
   const parts = [];
   if (baseUrl && !/<base\s/i.test(html)) parts.push(`<base href="${baseUrl.replace(/"/g, '&quot;')}" data-codi-bridge="1">`);
-  parts.push(`<script data-codi-bridge="1">${bridge.replace(/<\/script/gi, '<\\/script')}<\/script>`);
+  parts.push(`<script data-codi-bridge="1">${(core + '\n' + bridge).replace(/<\/script/gi, '<\\/script')}<\/script>`);
   const inject = parts.join('\n');
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + '\n' + inject);
   if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + '\n' + inject);
@@ -600,13 +612,13 @@ $('captureLoad').onclick = async () => {
 window.__codiReceiveCapture = (p) => { if (p && p.html) loadCapturedPayload(p.html, p.url, 'extension'); };
 if (window.__codiPendingCapture) { const p = window.__codiPendingCapture; window.__codiPendingCapture = null; window.__codiReceiveCapture(p); }
 
-function getPageHTML() {
+function getPageHTML(full) {
   return new Promise((resolve, reject) => {
     if (!pageReady) return reject(new Error('no page loaded'));
     const id = bridgeReqId++;
     bridgeWaiters[id] = resolve;
-    frame.contentWindow.postMessage({ __codi: true, type: 'get-html', id }, '*');
-    setTimeout(() => { if (bridgeWaiters[id]) { delete bridgeWaiters[id]; reject(new Error('page did not respond (bridge timeout)')); } }, 5000);
+    frame.contentWindow.postMessage({ __codi: true, type: 'get-html', id, full: !!full }, '*');
+    setTimeout(() => { if (bridgeWaiters[id]) { delete bridgeWaiters[id]; reject(new Error('page did not respond (bridge timeout)')); } }, 8000);
   });
 }
 
@@ -621,7 +633,7 @@ window.addEventListener('message', (e) => {
       const page = { t: new Date().toISOString(), url: msg.url, title: msg.title, htmlBytes: null };
       session.pages.push(page);
       // measure the capturable HTML right away so the size shows before any send
-      getPageHTML().then(html => {
+      getPageHTML($('fullCapture').checked).then(html => {
         page.htmlBytes = html.length;
         setHtmlSize(html.length);
         // Warn if a cloud render came back as a bot/captcha challenge.
@@ -673,7 +685,7 @@ async function send() {
   if (!prompt) return log('error', 'send', 'Prompt is empty');
 
   let html;
-  try { html = await getPageHTML(); }
+  try { html = await getPageHTML($('fullCapture').checked); }
   catch (err) { return log('error', 'send', 'Could not capture page HTML: ' + err.message + ' — load a page on the right first.'); }
   setHtmlSize(html.length);
 

@@ -12,7 +12,10 @@ const { transformHtml, fetchRendered, looksLikeChallenge } = require('./lib/tran
 
 const PORT = process.env.PORT || 4000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const readBridge = () => fs.readFileSync(path.join(PUBLIC_DIR, 'bridge.js'), 'utf8');
+// capture-core defines the shared serializer the bridge uses, so it must load first.
+const readBridge = () =>
+  fs.readFileSync(path.join(PUBLIC_DIR, 'capture-core.js'), 'utf8') + '\n' +
+  fs.readFileSync(path.join(PUBLIC_DIR, 'bridge.js'), 'utf8');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

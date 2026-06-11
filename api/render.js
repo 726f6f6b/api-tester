@@ -8,10 +8,10 @@ const { transformHtml, fetchRendered, looksLikeChallenge } = require('../lib/tra
 
 async function getBridge(req) {
   const proto = req.headers['x-forwarded-proto'] || 'https';
-  const r = await fetch(`${proto}://${req.headers.host}/bridge.js`, {
-    headers: req.headers.authorization ? { authorization: req.headers.authorization } : {},
-  });
-  return r.text();
+  const auth = req.headers.authorization ? { authorization: req.headers.authorization } : {};
+  const get = (p) => fetch(`${proto}://${req.headers.host}${p}`, { headers: auth }).then((r) => r.text());
+  const [core, bridge] = await Promise.all([get('/capture-core.js'), get('/bridge.js')]);
+  return core + '\n' + bridge;
 }
 
 module.exports = async (req, res) => {

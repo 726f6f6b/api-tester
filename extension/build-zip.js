@@ -11,9 +11,15 @@ const crcTable = (() => {
 })();
 function crc32(buf) { let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
 
+// Keep the extension's copy of the shared serializer in sync with public/.
+fs.copyFileSync(
+  path.join(__dirname, '..', 'public', 'capture-core.js'),
+  path.join(__dirname, 'capture-core.js')
+);
+
 // Files that make up the loadable extension (dev scripts excluded).
 const NAMES = [
-  'manifest.json', 'background.js', 'options.html', 'options.js',
+  'manifest.json', 'background.js', 'capture-core.js', 'options.html', 'options.js',
   'icons/icon16.png', 'icons/icon32.png', 'icons/icon48.png', 'icons/icon128.png',
 ];
 

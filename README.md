@@ -98,6 +98,14 @@ The page renders as a static, script-free snapshot; Send and Apply work against 
 
 The download zip is prebuilt at `public/codi-capture-extension.zip`. If you change anything under `extension/`, regenerate it with `npm run build:ext`.
 
+## Capture completeness
+
+The HTML sent to Codi is the **live, post-render DOM** (after the page's JS has run), not raw source — so JS-built content, classes, inline styles, and embedded `<style>`/CSS-in-JS blocks are all included. On top of that, every capture also **reflects live form state** (typed values, checked/selected) into attributes and **serializes open shadow DOM** into declarative `<template shadowrootmode>` — things plain `outerHTML` drops.
+
+The **Full capture** checkbox (under Send) additionally **inlines external stylesheet rules** into the payload, so Codi sees the actual CSS behind class names rather than just `<link>` references. It makes the payload bigger, so it's opt-in.
+
+One honest limit: a stylesheet's rules are only readable when it's same-origin to the captured document or served with CORS headers. In **proxy/cloud render**, the page is framed from the tester's origin, so a site's own CSS is cross-origin and often can't be inlined (it still loads visually via `<base>`, and Codi still gets the link). Where Full capture pays off most is the **Codi Capture extension**, which runs on the page's real origin — there same-origin sheets, constructable stylesheets, and shadow styles all inline cleanly. The extension always captures at full fidelity.
+
 ## Caveats
 
 - Sites are proxied with a `<base>` tag so their assets load from the real origin — most sites render fine, but heavy SPAs that fetch same-origin APIs may partially break (their XHRs go to the real origin and can hit CORS). The HTML capture and bundle injection still work.

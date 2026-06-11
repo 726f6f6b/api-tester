@@ -4,13 +4,14 @@
 
 const { transformHtml } = require('../lib/transform');
 
-// Fetch our own bridge.js (forwarding basic-auth so the middleware allows it).
+// Fetch our own capture-core.js + bridge.js (forwarding basic-auth so the
+// middleware allows it). capture-core must come first — the bridge uses it.
 async function getBridge(req) {
   const proto = req.headers['x-forwarded-proto'] || 'https';
-  const r = await fetch(`${proto}://${req.headers.host}/bridge.js`, {
-    headers: req.headers.authorization ? { authorization: req.headers.authorization } : {},
-  });
-  return r.text();
+  const auth = req.headers.authorization ? { authorization: req.headers.authorization } : {};
+  const get = (p) => fetch(`${proto}://${req.headers.host}${p}`, { headers: auth }).then((r) => r.text());
+  const [core, bridge] = await Promise.all([get('/capture-core.js'), get('/bridge.js')]);
+  return core + '\n' + bridge;
 }
 
 module.exports = async (req, res) => {

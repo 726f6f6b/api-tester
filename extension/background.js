@@ -37,10 +37,20 @@ chrome.action.onClicked.addListener(async (tab) => {
       return flash('!', '#d1242f', "Can't capture this kind of page");
     }
 
-    // 1) Capture the live page from the active tab.
+    // 1) Capture the live page from the active tab, at full fidelity: load the
+    //    shared serializer (inline CSS, form state, shadow DOM) then call it.
+    //    Runs in MAIN world so it can read the page's stylesheets.
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id }, world: 'MAIN', files: ['capture-core.js'],
+    });
     const [{ result: payload }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => ({ url: location.href, html: document.documentElement.outerHTML }),
+      target: { tabId: tab.id }, world: 'MAIN',
+      func: () => ({
+        url: location.href,
+        html: window.__codiCaptureHTML
+          ? window.__codiCaptureHTML({ inlineCSS: true, shadow: true, formState: true })
+          : document.documentElement.outerHTML,
+      }),
     });
 
     // 2) Best-effort clipboard fallback (runs in the page, which has focus).

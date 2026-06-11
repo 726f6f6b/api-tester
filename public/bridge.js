@@ -83,7 +83,12 @@
     window.parent.postMessage(Object.assign({ __codi: true }, msg), '*');
   }
 
-  function cleanHTML() {
+  function cleanHTML(opts) {
+    // Prefer the shared serializer (inlines CSS, reflects form state, serializes
+    // shadow DOM). Falls back to a plain clone if it isn't present.
+    if (window.__codiCaptureHTML) {
+      try { return window.__codiCaptureHTML(opts || {}); } catch (e) { /* fall through */ }
+    }
     var clone = document.documentElement.cloneNode(true);
     var injected = clone.querySelectorAll('[data-codi-bridge]');
     for (var i = 0; i < injected.length; i++) injected[i].remove();
@@ -151,7 +156,7 @@
     if (!msg || !msg.__codi) return;
     switch (msg.type) {
       case 'get-html':
-        post({ type: 'html', id: msg.id, html: cleanHTML(), url: location.href, title: document.title });
+        post({ type: 'html', id: msg.id, html: cleanHTML({ inlineCSS: !!msg.full, shadow: true, formState: true }), url: location.href, title: document.title });
         break;
       case 'apply-bundle':
         applyBundle(msg.code, msg.id);
