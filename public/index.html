@@ -504,7 +504,14 @@ window.addEventListener('message', (e) => {
       const page = { t: new Date().toISOString(), url: msg.url, title: msg.title, htmlBytes: null };
       session.pages.push(page);
       // measure the capturable HTML right away so the size shows before any send
-      getPageHTML().then(html => { page.htmlBytes = html.length; setHtmlSize(html.length); }).catch(() => {});
+      getPageHTML().then(html => {
+        page.htmlBytes = html.length;
+        setHtmlSize(html.length);
+        // Warn if a cloud render came back as a bot/captcha challenge.
+        if (loadStartedMode === 'render' && /hcaptcha|recaptcha|are you human|security check|just a moment|cf-chl|challenge-platform|_incapsula_resource|incapsula incident|distil_referrer|request unsuccessful/i.test(html)) {
+          log('error', 'render', 'This looks like a bot wall, not the real page — the site has anti-bot protection (e.g. Cloudflare/Incapsula) that even the unblocker could not pass. Try again, or capture the page from its real logged-in tab.');
+        }
+      }).catch(() => {});
       updateFlow();
       break;
     }

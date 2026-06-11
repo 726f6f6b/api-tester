@@ -8,7 +8,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { transformHtml, fetchRendered } = require('./lib/transform');
+const { transformHtml, fetchRendered, looksLikeChallenge } = require('./lib/transform');
 
 const PORT = process.env.PORT || 4000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -109,6 +109,7 @@ async function handleRender(req, res, query) {
   send(res, 200, html, {
     'Content-Type': 'text/html; charset=utf-8',
     'X-Rendered-From': target,
+    'X-Render-Challenge': looksLikeChallenge(rendered) ? '1' : '0',
     'Cache-Control': 'no-store',
   });
 }

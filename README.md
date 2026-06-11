@@ -75,6 +75,14 @@ RENDER_API_TOKEN=<your token>
 
 It targets the [Browserless](https://browserless.io) `/content` contract (`POST { url }` → rendered HTML) by default; any endpoint with that shape works, including a self-hosted Browserless Docker container. Without these set, Cloud render returns a clear "not configured" message and Proxy mode is unaffected.
 
+**Anti-bot sites.** Some sites (e.g. Boots, behind Imperva/Incapsula) block automated browsers. When a `/content` render comes back as a bot wall, the tester automatically retries against the same host's `/unblock` endpoint (Browserless's challenge-solving "web unblocker"). For stubborn WAFs you can push success further with a residential proxy via the options passthrough:
+
+```
+RENDER_API_OPTS={"proxy":"residential","proxySticky":true}
+```
+
+Even so, the hardest anti-bot walls (or logged-in/personalized pages) may not yield to any automated render — for those, capturing from the site's own tab is the only reliable route. `RENDER_API_OPTS` also accepts other provider options (`waitForSelector`, `blockAds`, etc.) merged into the request body.
+
 ## Caveats
 
 - Sites are proxied with a `<base>` tag so their assets load from the real origin — most sites render fine, but heavy SPAs that fetch same-origin APIs may partially break (their XHRs go to the real origin and can hit CORS). The HTML capture and bundle injection still work.
