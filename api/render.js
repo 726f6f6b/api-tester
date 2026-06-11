@@ -4,7 +4,7 @@
 // that fully-rendered snapshot — scripts stripped — into the iframe.
 // Exposed at /render via the rewrite in vercel.json.
 
-const { transformHtml, fetchRendered, looksLikeChallenge } = require('../lib/transform');
+const { transformHtml, fetchRendered, looksLikeChallenge, inlineStylesheets } = require('../lib/transform');
 
 async function getBridge(req) {
   const proto = req.headers['x-forwarded-proto'] || 'https';
@@ -27,6 +27,7 @@ module.exports = async (req, res) => {
     return res.status(err.code === 'NOT_CONFIGURED' ? 501 : 502).send(err.message);
   }
 
+  if (req.query.fullCss) rendered = await inlineStylesheets(rendered, target);
   const html = transformHtml(rendered, target, await getBridge(req), { stripScripts: true });
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('X-Rendered-From', target);

@@ -66,7 +66,7 @@
   #selectedEl { height: 44px; color: var(--yellow); }
   .row { display: flex; gap: 8px; align-items: center; }
   .hint { color: var(--dim); font-size: 11px; }
-  .chk { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; cursor: pointer; }
+  .chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--dim); cursor: pointer; white-space: nowrap; }
   .chk input { margin: 0; }
 
   #log { flex: 1; overflow-y: auto; padding: 8px 14px; font-family: var(--mono); font-size: 11.5px; background: var(--panel); }
@@ -181,7 +181,6 @@
         <button id="sendBtn"><svg class="icon"><use href="#i-play"/></svg>Send (rpc <span id="rpcLabel">1</span>)</button>
         <span class="hint" id="stepHint"></span>
       </div>
-      <label class="chk" title="Inline external CSS rules + reflect form/UI state into the captured HTML. More complete for Codi, but a bigger payload."><input type="checkbox" id="fullCapture"> Full capture <span class="hint">— inline CSS &amp; form state (bigger, more complete)</span></label>
     </div>
     <div class="section">
       <h2>Selected element <span style="text-transform:none">(optional → targeted-changes mode)</span></h2>
@@ -214,6 +213,7 @@
       </div>
       <button id="loadBtn"><svg class="icon"><use href="#i-arrow-right"/></svg>Load page</button>
       <button id="captureBtn" title="Capture the page from your own browser tab — for logins / hard bot walls"><svg class="icon"><use href="#i-capture"/></svg>Capture tab</button>
+      <label class="chk" title="Inline external CSS rules (and reflect form/UI state) into the captured HTML so Codi sees the real styling, not just class names. Bigger payload."><input type="checkbox" id="fullCapture"> Full CSS</label>
     </div>
     <div class="picking-banner" id="pickBanner">Picking mode — click an element in the page below (Esc to cancel)</div>
     <div class="framewrap">
@@ -503,10 +503,12 @@ function setMode(m) {
 $('modeProxy').onclick = () => setMode('proxy');
 $('modeRender').onclick = () => setMode('render');
 
-// Re-measure the HTML size chip when Full capture is toggled.
+// When Full CSS is toggled: in proxy/cloud mode the inlining happens server-side,
+// so re-fetch the page to apply it; in capture/snapshot mode just re-measure.
 $('fullCapture').addEventListener('change', () => {
   if (!pageReady) return;
-  getPageHTML($('fullCapture').checked).then(html => setHtmlSize(html.length)).catch(() => {});
+  if (loadStartedMode === 'proxy' || loadStartedMode === 'render') loadPage();
+  else getPageHTML($('fullCapture').checked).then(html => setHtmlSize(html.length)).catch(() => {});
 });
 
 function loadPage() {
@@ -522,8 +524,9 @@ function loadPage() {
     ? 'Rendering ' + url + ' in a cloud browser… (can take ~10–30s)'
     : 'Loading ' + url + ' …';
   const endpoint = loadMode === 'render' ? '/render' : '/proxy';
-  frame.src = endpoint + '?url=' + encodeURIComponent(url);
-  log('info', 'page', (loadMode === 'render' ? 'cloud render' : 'proxy') + ' → ' + url);
+  const fullCss = $('fullCapture').checked ? '&fullCss=1' : '';
+  frame.src = endpoint + '?url=' + encodeURIComponent(url) + fullCss;
+  log('info', 'page', (loadMode === 'render' ? 'cloud render' : 'proxy') + (fullCss ? ' (full CSS)' : '') + ' → ' + url);
   updateFlow();
 }
 $('loadBtn').onclick = loadPage;

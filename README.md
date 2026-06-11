@@ -102,9 +102,12 @@ The download zip is prebuilt at `public/codi-capture-extension.zip`. If you chan
 
 The HTML sent to Codi is the **live, post-render DOM** (after the page's JS has run), not raw source — so JS-built content, classes, inline styles, and embedded `<style>`/CSS-in-JS blocks are all included. On top of that, every capture also **reflects live form state** (typed values, checked/selected) into attributes and **serializes open shadow DOM** into declarative `<template shadowrootmode>` — things plain `outerHTML` drops.
 
-The **Full capture** checkbox (under Send) additionally **inlines external stylesheet rules** into the payload, so Codi sees the actual CSS behind class names rather than just `<link>` references. It makes the payload bigger, so it's opt-in.
+The **Full CSS** checkbox (next to the load controls) additionally **inlines external stylesheet rules** into the payload, so Codi sees the actual CSS behind class names rather than just `<link>` references. It makes the payload bigger, so it's opt-in. Two mechanisms cover the two situations:
 
-One honest limit: a stylesheet's rules are only readable when it's same-origin to the captured document or served with CORS headers. In **proxy/cloud render**, the page is framed from the tester's origin, so a site's own CSS is cross-origin and often can't be inlined (it still loads visually via `<base>`, and Codi still gets the link). Where Full capture pays off most is the **Codi Capture extension**, which runs on the page's real origin — there same-origin sheets, constructable stylesheets, and shadow styles all inline cleanly. The extension always captures at full fidelity.
+- **Proxy / Cloud render** — inlining happens **server-side**: the tester fetches each `<link>` stylesheet (and its `@import`s, rewriting relative `url()`s to absolute) and inlines them before serving. The server has no CORS limits, so this captures a site's own cross-origin CSS completely. Toggling Full CSS reloads the page to apply it.
+- **Extension / pasted snapshot** — inlining happens **client-side** in the captured document, which runs on the page's real origin, so same-origin sheets, constructable stylesheets, and shadow styles all inline cleanly. The extension always captures at full fidelity.
+
+(A stylesheet that itself blocks server fetches, or a closed shadow root's adopted styles, can still slip through — but in practice Full CSS now delivers the complete stylesheet in every mode.)
 
 ## Caveats
 

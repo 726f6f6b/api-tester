@@ -2,7 +2,7 @@
 // Fetches a target site, strips frame-blocking CSP, injects the bridge inline.
 // Exposed at /proxy via the rewrite in vercel.json.
 
-const { transformHtml } = require('../lib/transform');
+const { transformHtml, inlineStylesheets } = require('../lib/transform');
 
 // Fetch our own capture-core.js + bridge.js (forwarding basic-auth so the
 // middleware allows it). capture-core must come first — the bridge uses it.
@@ -56,7 +56,8 @@ module.exports = async (req, res) => {
     return res.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
   }
 
-  const raw = await upstream.text();
+  let raw = await upstream.text();
+  if (req.query.fullCss) raw = await inlineStylesheets(raw, finalUrl);
   const html = transformHtml(raw, finalUrl, await getBridge(req));
 
   // Deliberately omit X-Frame-Options / CSP headers so the page frames.

@@ -8,7 +8,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { transformHtml, fetchRendered, looksLikeChallenge } = require('./lib/transform');
+const { transformHtml, fetchRendered, looksLikeChallenge, inlineStylesheets } = require('./lib/transform');
 
 const PORT = process.env.PORT || 4000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -82,7 +82,8 @@ async function handleProxy(req, res, query) {
     return send(res, upstream.status, buf, { 'Content-Type': contentType || 'application/octet-stream' });
   }
 
-  const raw = await upstream.text();
+  let raw = await upstream.text();
+  if (query.get('fullCss')) raw = await inlineStylesheets(raw, finalUrl);
   const html = transformHtml(raw, finalUrl, readBridge());
 
   // Deliberately omit X-Frame-Options / CSP headers so the page frames.
@@ -109,6 +110,7 @@ async function handleRender(req, res, query) {
     return send(res, status, err.message, { 'Content-Type': 'text/plain; charset=utf-8' });
   }
 
+  if (query.get('fullCss')) rendered = await inlineStylesheets(rendered, target);
   const html = transformHtml(rendered, target, readBridge(), { stripScripts: true });
   send(res, 200, html, {
     'Content-Type': 'text/html; charset=utf-8',
