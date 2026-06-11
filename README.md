@@ -87,20 +87,16 @@ Even so, the hardest anti-bot walls (or logged-in/personalized pages) may not yi
 
 When even cloud render can't reach a page — sites behind a login, or the hardest bot walls — use **Capture tab** (next to Load page). You capture the page in your *own* browser, where it's fully loaded and signed in, then load that snapshot into the tester to preview Codi's changes.
 
-**Easiest — the Chrome extension** (`extension/` folder): one toolbar click, no pasting.
+It uses the **Codi Capture** Chrome extension — one toolbar click, no pasting.
 
-1. Chrome → `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the `extension/` folder. (Icons are included; rerun `node extension/make-icons.js` only if you tweak them.)
-2. Click the extension's **Details → Extension options**, set your **Tester URL** (e.g. your Vercel URL or `http://localhost:4000`), and Save (grant the permission prompt).
-3. Now on any page — including logged-in ones — click the **Codi Capture** toolbar button. It grabs the page and delivers it straight into your tester tab (opening one if needed), and copies it to the clipboard as a fallback. A green ✓ badge confirms it sent.
-4. Now on any page — including logged-in ones — click the **Codi Capture** toolbar button. It grabs the page and delivers it straight into your tester tab (opening one if needed), and also copies it to the clipboard as a fallback.
+1. In the tester, click **Capture tab** → **Download (.zip)** (served at `/codi-capture-extension.zip`), then unzip it.
+2. Open `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the unzipped folder.
+3. Open the extension's **options**, set your **Tester URL** (the dialog shows the exact value), and Save (grant the permission prompt).
+4. On any page — including logged-in ones — click the **Codi Capture** toolbar button. It grabs the page and delivers it straight into your tester tab (opening one if needed), with a green check badge to confirm. It also copies to the clipboard as a fallback you can paste under "Manual fallback" in the dialog.
 
-**No-install alternative — bookmarklet / console snippet** (also in the Capture dialog):
+The page renders as a static, script-free snapshot; Send and Apply work against it exactly like a proxied page. The captured HTML never touches the tester's server — the snapshot is assembled in your browser (it is still sent to the Codi API when you hit Send, which is the point). Because your real browser did the loading, this bypasses origin allowlists, CORS, and bot walls entirely.
 
-1. **One-time setup:** drag the **Codi Capture** button to your bookmarks bar (or "copy bookmarklet" and make a bookmark from it). For CSP-strict sites that block bookmarklets, "copy console snippet" instead and paste it into the tab's DevTools console.
-2. **On the site:** open the page in another tab, sign in / pass any checks, then click the **Codi Capture** bookmark. It copies the live page (`{url, html}`) to your clipboard.
-3. **Back in the tester:** paste it into the dialog and load. The page renders as a static, script-free snapshot; Send and Apply work against it exactly like a proxied page.
-
-The captured HTML never touches the tester's server — the snapshot is assembled in your browser. (It is still sent to the Codi API when you hit Send, which is the point.) Because your real browser did the loading, this bypasses origin allowlists, CORS, and bot walls entirely.
+The download zip is prebuilt at `public/codi-capture-extension.zip`. If you change anything under `extension/`, regenerate it with `npm run build:ext`.
 
 ## Caveats
 

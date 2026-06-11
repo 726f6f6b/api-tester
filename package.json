@@ -5,7 +5,8 @@
   "description": "Local dashboard for testing the Codi partner WebSocket API against real websites",
   "scripts": {
     "start": "node server.js",
-    "deploy": "vercel --prod"
+    "deploy": "vercel --prod",
+    "build:ext": "node extension/make-icons.js && node extension/build-zip.js"
   },
   "engines": {
     "node": ">=18"

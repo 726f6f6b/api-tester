@@ -21,6 +21,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.zip': 'application/zip',
 };
 
 function send(res, status, body, headers = {}) {
