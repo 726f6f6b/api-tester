@@ -84,6 +84,12 @@
 
   .urlbar { display: flex; gap: 8px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); align-items: center; }
   #pageUrl { flex: 1; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; flex: none; }
+  .seg button { border: 0; border-radius: 0; background: var(--panel); color: var(--dim); padding: 6px 10px; gap: 5px; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.active { background: var(--black); color: #fff; }
+  .seg button:hover { background: var(--panel2); }
+  .seg button.active:hover { background: #000; }
   #htmlSize { font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; }
   #htmlSize b { color: var(--text); }
   iframe { flex: 1; border: 0; background: #fff; }
@@ -107,6 +113,7 @@
   <symbol id="i-power" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
   <symbol id="i-report" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></symbol>
 </svg>
 
 <header>
@@ -177,6 +184,10 @@
     <div class="urlbar">
       <input id="pageUrl" placeholder="https://example.com — load a real site to test against">
       <span id="htmlSize"></span>
+      <div class="seg" id="modeSeg">
+        <button id="modeProxy" class="active" title="Fetch the page source and proxy it — fast, works for most sites (default)">Proxy</button>
+        <button id="modeRender" title="Render in a cloud headless browser at the site's real origin — use when a site doesn't load fully in proxy mode"><svg class="icon"><use href="#i-cloud"/></svg>Cloud render</button>
+      </div>
       <button id="loadBtn"><svg class="icon"><use href="#i-arrow-right"/></svg>Load page</button>
     </div>
     <div class="picking-banner" id="pickBanner">Picking mode — click an element in the page below (Esc to cancel)</div>
@@ -422,19 +433,55 @@ function stopPicking() {
   if (pageReady) frame.contentWindow.postMessage({ __codi: true, type: 'pick-stop' }, '*');
 }
 
+let loadMode = 'proxy';       // 'proxy' | 'render'
+let loadToken = 0;            // invalidates stale load watchdogs
+let loadStartedMode = 'proxy';
+
+function setMode(m) {
+  loadMode = m;
+  $('modeProxy').classList.toggle('active', m === 'proxy');
+  $('modeRender').classList.toggle('active', m === 'render');
+}
+$('modeProxy').onclick = () => setMode('proxy');
+$('modeRender').onclick = () => setMode('render');
+
 function loadPage() {
   const url = $('pageUrl').value.trim();
   if (!url) return log('error', 'page', 'Enter a URL first');
   pageReady = false;
   stopPicking();
   setHtmlSize(null);
+  loadStartedMode = loadMode;
+  loadToken++;
   $('frameOverlay').style.display = 'flex';
-  $('frameOverlay').textContent = 'Loading ' + url + ' …';
-  frame.src = '/proxy?url=' + encodeURIComponent(url);
+  $('frameOverlay').textContent = loadMode === 'render'
+    ? 'Rendering ' + url + ' in a cloud browser… (can take ~10–30s)'
+    : 'Loading ' + url + ' …';
+  const endpoint = loadMode === 'render' ? '/render' : '/proxy';
+  frame.src = endpoint + '?url=' + encodeURIComponent(url);
+  log('info', 'page', (loadMode === 'render' ? 'cloud render' : 'proxy') + ' → ' + url);
   updateFlow();
 }
 $('loadBtn').onclick = loadPage;
 $('pageUrl').addEventListener('keydown', e => { if (e.key === 'Enter') loadPage(); });
+
+// Watchdog: /proxy and /render are same-origin, so on a failed load (error text,
+// not HTML) the bridge never reports "ready". Detect that and surface the
+// server's message instead of leaving the overlay spinning.
+frame.addEventListener('load', () => {
+  const token = loadToken;
+  setTimeout(() => {
+    if (token !== loadToken || pageReady) return;
+    let msg = 'The page did not initialize. It may block framing, or (cloud render) the render backend errored.';
+    try {
+      const txt = (frame.contentDocument?.body?.innerText || '').trim();
+      if (txt) msg = txt.slice(0, 500);
+    } catch (e) { /* cross-origin: leave default */ }
+    $('frameOverlay').style.display = 'flex';
+    $('frameOverlay').textContent = msg;
+    log('error', loadStartedMode === 'render' ? 'render' : 'proxy', msg);
+  }, loadStartedMode === 'render' ? 1800 : 1200);
+});
 
 function getPageHTML() {
   return new Promise((resolve, reject) => {

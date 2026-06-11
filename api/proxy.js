@@ -2,6 +2,17 @@
 // Fetches a target site, strips frame-blocking CSP, injects the bridge inline.
 // Exposed at /proxy via the rewrite in vercel.json.
 
+const { transformHtml } = require('../lib/transform');
+
+// Fetch our own bridge.js (forwarding basic-auth so the middleware allows it).
+async function getBridge(req) {
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const r = await fetch(`${proto}://${req.headers.host}/bridge.js`, {
+    headers: req.headers.authorization ? { authorization: req.headers.authorization } : {},
+  });
+  return r.text();
+}
+
 module.exports = async (req, res) => {
   let target = req.query.url;
   if (!target) return res.status(400).send('Missing ?url= parameter');
@@ -44,34 +55,8 @@ module.exports = async (req, res) => {
     return res.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
   }
 
-  let html = await upstream.text();
-
-  // Strip CSP <meta> tags so the injected bridge script and bundle eval work.
-  html = html.replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/gi, '');
-
-  const injection = [];
-  // <base> so relative URLs (css/js/img) resolve against the real origin.
-  if (!/<base\s/i.test(html)) {
-    injection.push(`<base href="${finalUrl.replace(/"/g, '&quot;')}" data-codi-bridge="1">`);
-  }
-  // Bridge must be inlined: the <base> tag above would make a src="/bridge.js"
-  // reference resolve against the target site's origin, not this deployment.
-  // Fetched from our own origin, forwarding basic-auth so the middleware lets it through.
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  const bridgeRes = await fetch(`${proto}://${req.headers.host}/bridge.js`, {
-    headers: req.headers.authorization ? { authorization: req.headers.authorization } : {},
-  });
-  const bridgeSrc = await bridgeRes.text();
-  injection.push(`<script data-codi-bridge="1">${bridgeSrc.replace(/<\/script/gi, '<\\/script')}</script>`);
-  const inject = injection.join('\n');
-
-  if (/<head[^>]*>/i.test(html)) {
-    html = html.replace(/<head[^>]*>/i, (m) => m + '\n' + inject);
-  } else if (/<html[^>]*>/i.test(html)) {
-    html = html.replace(/<html[^>]*>/i, (m) => m + '\n' + inject);
-  } else {
-    html = inject + '\n' + html;
-  }
+  const raw = await upstream.text();
+  const html = transformHtml(raw, finalUrl, await getBridge(req));
 
   // Deliberately omit X-Frame-Options / CSP headers so the page frames.
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

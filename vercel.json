@@ -1,7 +1,11 @@
 {
   "outputDirectory": "public",
-  "rewrites": [{ "source": "/proxy", "destination": "/api/proxy" }],
+  "rewrites": [
+    { "source": "/proxy", "destination": "/api/proxy" },
+    { "source": "/render", "destination": "/api/render" }
+  ],
   "functions": {
-    "api/proxy.js": { "maxDuration": 30 }
+    "api/proxy.js": { "maxDuration": 30 },
+    "api/render.js": { "maxDuration": 60 }
   }
 }

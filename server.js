@@ -8,9 +8,11 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { transformHtml, fetchRendered } = require('./lib/transform');
 
 const PORT = process.env.PORT || 4000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const readBridge = () => fs.readFileSync(path.join(PUBLIC_DIR, 'bridge.js'), 'utf8');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -76,34 +78,37 @@ async function handleProxy(req, res, query) {
     return send(res, upstream.status, buf, { 'Content-Type': contentType || 'application/octet-stream' });
   }
 
-  let html = await upstream.text();
-
-  // Strip CSP <meta> tags so our injected bridge script and bundle eval work.
-  html = html.replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/gi, '');
-
-  const injection = [];
-  // <base> so relative URLs (css/js/img) resolve against the real origin.
-  if (!/<base\s/i.test(html)) {
-    injection.push(`<base href="${finalUrl.replace(/"/g, '&quot;')}" data-codi-bridge="1">`);
-  }
-  // Bridge must be inlined: the <base> tag above would make a src="/bridge.js"
-  // reference resolve against the target site's origin, not this server.
-  const bridgeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'bridge.js'), 'utf8');
-  injection.push(`<script data-codi-bridge="1">${bridgeSrc.replace(/<\/script/gi, '<\\/script')}</script>`);
-  const inject = injection.join('\n');
-
-  if (/<head[^>]*>/i.test(html)) {
-    html = html.replace(/<head[^>]*>/i, (m) => m + '\n' + inject);
-  } else if (/<html[^>]*>/i.test(html)) {
-    html = html.replace(/<html[^>]*>/i, (m) => m + '\n' + inject);
-  } else {
-    html = inject + '\n' + html;
-  }
+  const raw = await upstream.text();
+  const html = transformHtml(raw, finalUrl, readBridge());
 
   // Deliberately omit X-Frame-Options / CSP headers so the page frames.
   send(res, upstream.status, html, {
     'Content-Type': 'text/html; charset=utf-8',
     'X-Proxied-From': finalUrl,
+    'Cache-Control': 'no-store',
+  });
+}
+
+// Cloud-render mode: a hosted headless browser loads the URL at its real origin
+// (sidestepping origin allowlists / CORS / cookie walls), then we serve that
+// fully-rendered snapshot — scripts stripped — into the iframe.
+async function handleRender(req, res, query) {
+  let target = query.get('url');
+  if (!target) return send(res, 400, 'Missing ?url= parameter');
+  if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
+
+  let rendered;
+  try {
+    rendered = await fetchRendered(target, process.env);
+  } catch (err) {
+    const status = err.code === 'NOT_CONFIGURED' ? 501 : 502;
+    return send(res, status, err.message, { 'Content-Type': 'text/plain; charset=utf-8' });
+  }
+
+  const html = transformHtml(rendered, target, readBridge(), { stripScripts: true });
+  send(res, 200, html, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'X-Rendered-From': target,
     'Cache-Control': 'no-store',
   });
 }
@@ -137,6 +142,7 @@ const server = http.createServer((req, res) => {
   }
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (url.pathname === '/proxy') return handleProxy(req, res, url.searchParams);
+  if (url.pathname === '/render') return handleRender(req, res, url.searchParams);
   serveStatic(req, res, url.pathname);
 });
 

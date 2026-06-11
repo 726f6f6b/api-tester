@@ -58,6 +58,23 @@ npm run deploy      # = vercel --prod
 
 The plain Node server ([server.js](server.js)) is for local use (`npm start`) and also deploys anywhere Node 18+ runs (Render, Railway, a VPS): port from `PORT`, same `TESTER_PASSWORD` env var.
 
+## Cloud render mode (fallback for stubborn sites)
+
+Some sites won't load fully through the proxy — single-page apps with hardcoded **origin allowlists** (e.g. an embedded CMS live-preview SDK), or product data behind **cookie/CORS-gated APIs**. These fail because the proxied request comes from the tester's origin, not the site's own.
+
+The **Cloud render** toggle (next to the URL bar) fixes this: a hosted headless browser loads the URL at the site's *real* origin — so origin checks pass and same-origin APIs resolve — and the tester serves that fully-rendered snapshot (with the page's own scripts stripped so it stays stable). Codi's bundle still applies on top, since bundles are CSS/DOM changes.
+
+It's opt-in per load, so use Proxy by default and flip to Cloud render only when a page looks incomplete.
+
+**Configure a headless backend** via env vars (Vercel project settings, or your shell for local `npm start`):
+
+```
+RENDER_API_URL=https://production-sfo.browserless.io/content
+RENDER_API_TOKEN=<your token>
+```
+
+It targets the [Browserless](https://browserless.io) `/content` contract (`POST { url }` → rendered HTML) by default; any endpoint with that shape works, including a self-hosted Browserless Docker container. Without these set, Cloud render returns a clear "not configured" message and Proxy mode is unaffected.
+
 ## Caveats
 
 - Sites are proxied with a `<base>` tag so their assets load from the real origin — most sites render fine, but heavy SPAs that fetch same-origin APIs may partially break (their XHRs go to the real origin and can hit CORS). The HTML capture and bundle injection still work.
